@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GMESH — Mesh Generation</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="style.css?v=56" />
+</head>
+<body>
+  <div class="backend-banner" id="backend-banner" hidden></div>
+  <header class="appbar">
+    <span class="brand">GMESH</span>
+    <span class="subtitle">Mesh generation</span>
+    <div class="engine" id="engine-state" data-state="checking">Mesh engine: connecting&hellip;</div>
+    <div class="recent-wrap">
+      <button id="recent-btn" type="button" class="recent-btn" title="Recent projects">Recent &#9662;</button>
+      <div id="recent-menu" class="recent-menu" hidden></div>
+    </div>
+    <div class="win-buttons">
+      <button id="win-min" type="button" class="win-btn" title="Minimize">&#8212;</button>
+      <button id="win-max" type="button" class="win-btn" title="Maximize / Restore">&#9633;</button>
+      <button id="win-close" type="button" class="win-btn win-close" title="Close">&#10005;</button>
+    </div>
+  </header>
+
+  <nav class="menubar">
+    <div class="menu">
+      <button class="menu-btn" type="button">File</button>
+      <div class="menu-dropdown" hidden>
+        <button class="menu-item" id="menu-import" type="button">Import STL&#8230;</button>
+        <button class="menu-item" id="menu-save" type="button">Save project</button>
+        <button class="menu-item" id="menu-load" type="button">Load project</button>
+        <div class="menu-sep"></div>
+        <button class="menu-item" id="menu-exit" type="button">Exit</button>
+      </div>
+    </div>
+    <div class="menu">
+      <button class="menu-btn" type="button">Mesh</button>
+      <div class="menu-dropdown" hidden>
+        <button class="menu-item" id="menu-generate" type="button">Generate mesh</button>
+        <button class="menu-item" id="menu-volume" type="button">Volume mesh (tet)</button>
+        <button class="menu-item" id="menu-boundary" type="button">Boundary layer</button>
+      </div>
+    </div>
+    <div class="menu">
+      <button class="menu-btn" type="button">View</button>
+      <div class="menu-dropdown" hidden>
+        <button class="menu-item" id="menu-reset" type="button">Reset view</button>
+        <button class="menu-item" id="menu-zoom-in" type="button">Zoom in</button>
+        <button class="menu-item" id="menu-zoom-out" type="button">Zoom out</button>
+      </div>
+    </div>
+    <div class="menu">
+      <button class="menu-btn" type="button">Help</button>
+      <div class="menu-dropdown" hidden>
+        <button class="menu-item" id="menu-about" type="button">About GMESH</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="workspace">
+    <aside class="sidebar">
+      <div class="toolbar">
+        <div class="btn-row">
+          <button id="import-btn" type="button">Import STL…</button>
+        </div>
+        <input id="file-input" type="file" accept=".stl" hidden />
+
+        <div class="btn-row">
+          <button id="generate-btn" type="button" class="primary">Generate Mesh</button>
+          <button id="update-btn" type="button">Update</button>
+          <button id="stop-btn" type="button" disabled>Stop</button>
+          <button id="delete-mesh-btn" type="button" title="Remove the current mesh (keeps the geometry)">Delete Mesh</button>
+        </div>
+        <label class="field"><input id="volume-enable" type="checkbox" /> Volume mesh (tet)</label>
+        <label class="field">Mesh Method
+          <select id="mesh-method">
+            <option value="tet" selected>Tetrahedral</option>
+            <option value="hex">Hex-dominant</option>
+            <option value="sweep">Sweep (source → target)</option>
+            <option value="revolve">Revolve (axisymmetric)</option>
+          </select>
+        </label>
+        <div id="revolve-controls" class="sweep-controls" hidden>
+          <p class="hint">For solids of revolution (constant radius per axial station). Meshes a radial profile and revolves it into a structured hex mesh. Refuses non-axisymmetric geometry.</p>
+          <label class="field">Axis of revolution
+            <select id="revolve-axis">
+              <option value="auto" selected>Auto-detect</option>
+              <option value="x">X</option>
+              <option value="y">Y</option>
+              <option value="z">Z</option>
+            </select>
+          </label>
+          <label class="field">Angular layers <input id="revolve-layers" type="number" step="1" min="3" value="24" /></label>
+        </div>
+        <label class="field">Surface Mesh
+          <select id="surface-type">
+            <option value="tri" selected>Triangular</option>
+            <option value="quad">Quadrilateral</option>
+          </select>
+        </label>
+        <p class="hint">Hex-dominant uses Gmsh's HXT mesher; if it can't mesh the geometry it falls back to tetrahedral.</p>
+        <div id="sweep-controls" class="sweep-controls" hidden>
+          <p class="hint">Pick a source face and a target face (parallel/opposite). The source is meshed and swept to the target.</p>
+          <div class="btn-row">
+            <button id="pick-source-btn" type="button">Pick source face</button>
+            <button id="pick-target-btn" type="button">Pick target face</button>
+          </div>
+          <div class="btn-row">
+            <button id="clear-source-btn" type="button">Clear source face</button>
+            <button id="clear-target-btn" type="button">Clear target face</button>
+          </div>
+          <label class="field">Source face <span id="sweep-source-val">—</span></label>
+          <label class="field">Target face <span id="sweep-target-val">—</span></label>
+          <label class="field">Layers <input id="sweep-layers" type="number" step="1" min="1" value="5" /></label>
+        </div>
+        <label class="field">Export Format
+          <select id="export-format">
+            <option value="msh" selected>Gmsh .msh</option>
+            <option value="bdf">Nastran .bdf (ANSYS Fluent)</option>
+            <option value="inp">Abaqus .inp</option>
+            <option value="vtk">VTK .vtk</option>
+            <option value="stl">STL .stl</option>
+            <option value="med">MED .med</option>
+            <option value="dat">DAT .dat</option>
+          </select>
+        </label>
+
+        <details class="group" open>
+          <summary>DEFAULTS</summary>
+          <div class="group-body">
+            <label class="field">Physics Preference
+              <select id="physics">
+                <option value="mechanical" selected>Mechanical</option>
+                <option value="cfd">CFD</option>
+                <option value="electromagnetics">Electromagnetics</option>
+              </select>
+            </label>
+            <label class="field">Unit System
+              <select id="unit-system">
+                <option value="m" selected>Metric (m, kg, N, s, V, A)</option>
+                <option value="mm">Metric (mm, kg, N, s, mV, mA)</option>
+                <option value="cm">Metric (cm, g, dyne, s, V, A)</option>
+                <option value="ft">U.S. Customary (ft, lbm, lbf, &deg;F, s, V, A)</option>
+                <option value="in">U.S. Customary (in, lbm, lbf, &deg;F, s, V, A)</option>
+              </select>
+            </label>
+            <label class="field">Angle Unit
+              <select id="angle-unit">
+                <option value="deg" selected>Degrees</option>
+                <option value="rad">Radians</option>
+              </select>
+            </label>
+            <label class="field">Relevance <input id="relevance-num" type="number" step="5" min="0" max="200" value="100" /></label>
+          </div>
+        </details>
+
+        <details class="group" open>
+          <summary>SIZING</summary>
+          <div class="group-body">
+            <label class="field">Global Element Size (m) <input id="size-global" type="number" step="any" value="0.02" /></label>
+            <label class="field">Use Advanced Size Function
+              <select id="adv-size-fn">
+                <option value="off" selected>Off</option>
+                <option value="curvature">On: Curvature</option>
+                <option value="proximity">On: Proximity</option>
+              </select>
+            </label>
+            <label class="field">Relevance Center
+              <select id="relevance">
+                <option value="coarse">Coarse</option>
+                <option value="medium" selected>Medium</option>
+                <option value="fine">Fine</option>
+              </select>
+            </label>
+            <label class="field">Initial Size Seed (m) <input id="size-seed" type="number" step="any" value="" /></label>
+            <label class="field">Smoothing
+              <select id="smoothing">
+                <option value="none" selected>None</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </label>
+            <label class="field">Transition
+              <select id="transition">
+                <option value="fast" selected>Fast</option>
+                <option value="slow">Slow</option>
+              </select>
+            </label>
+            <label class="field">Span Angle Center
+              <select id="span-center">
+                <option value="coarse">Coarse</option>
+                <option value="medium" selected>Medium</option>
+                <option value="fine">Fine</option>
+              </select>
+            </label>
+            <label class="field">Curvature Normal Angle (°) <input id="curv-angle" type="number" step="any" value="30" /></label>
+            <label class="field">Min Size (m) <input id="size-min" type="number" step="any" value="0.001" /></label>
+            <label class="field">Max Face Size (m) <input id="size-face" type="number" step="any" value="" placeholder="auto" /></label>
+            <label class="field">Max Size (m) <input id="size-max" type="number" step="any" value="" placeholder="auto" /></label>
+            <label class="field">Growth Rate <input id="growth-rate" type="number" step="any" value="1.2" /></label>
+            <label class="field">Minimum Edge Length (m) <span id="min-edge">—</span></label>
+          </div>
+        </details>
+
+        <details class="group" open>
+          <summary>INFLATION</summary>
+          <div class="group-body">
+            <label class="field">Use Automatic Inflation
+              <select id="bl-auto">
+                <option value="none" selected>None</option>
+                <option value="program_controlled">Program Controlled</option>
+                <option value="all_faces">All Faces in Chosen Named Selection</option>
+              </select>
+            </label>
+            <label class="field">Inflation Option
+              <select id="bl-option">
+                <option value="smooth_transition" selected>Smooth Transition</option>
+                <option value="total_thickness">Total Thickness</option>
+                <option value="first_layer">First Layer Thickness</option>
+              </select>
+            </label>
+            <label class="field">Number of Layers <input id="bl-layers" type="number" step="1" min="1" value="5" /></label>
+            <label class="field">Growth Rate <input id="bl-growth" type="number" step="any" min="1" value="1.2" /></label>
+            <label class="field">First Layer Thickness (m) <input id="bl-first" type="number" step="any" min="0" value="0.001" /></label>
+            <label class="field">Total Thickness (m) <input id="bl-total" type="number" step="any" min="0" value="" /></label>
+            <label class="field">Maximum Layers <input id="bl-max" type="number" step="1" min="1" value="" /></label>
+            <div class="btn-row">
+              <button id="pick-wall-btn" type="button">Pick wall</button>
+            </div>
+            <p class="hint">Pick wall faces to inflate; if none are picked, inflation applies to all faces.</p>
+          </div>
+        </details>
+
+        <details class="group" open>
+          <summary>NAMED SELECTIONS</summary>
+          <div class="group-body">
+            <div class="btn-row">
+              <button id="ns-pick-face-btn" type="button">Pick face</button>
+              <button id="ns-pick-edge-btn" type="button">Pick edge</button>
+            </div>
+            <p class="hint">Name any picked face or edge here. A named selection is reused across
+              sizing (enter a size), inflation (tick "Wall") and export / $PhysicalNames.</p>
+            <div id="named-selections" class="regions" hidden></div>
+          </div>
+        </details>
+
+        <details class="group">
+          <summary>SIZING</summary>
+          <div class="group-body">
+            <div class="btn-row">
+              <button id="sizing-pick-face-btn" type="button">Pick face</button>
+              <button id="sizing-pick-edge-btn" type="button">Pick edge</button>
+            </div>
+            <p class="hint">Pick a face or edge, then <b>Apply</b> to create an independent sizing
+              control. <b>Cancel</b> discards the pending pick. Selecting a saved control
+              highlights only its own geometry.</p>
+            <div id="sizing-details" class="sizing-details" hidden>
+              <label class="field">Geometry <span id="sizing-geometry-val">&mdash;</span></label>
+              <div class="btn-row">
+                <button id="sizing-apply-btn" type="button" class="primary">Apply</button>
+                <button id="sizing-cancel-btn" type="button">Cancel</button>
+              </div>
+              <label class="field">Type
+                <select id="sizing-type">
+                  <option value="element_size" selected>Element Size</option>
+                </select>
+              </label>
+              <label class="field" id="sizing-size-field">Element Size (m)
+                <input id="sizing-size" type="number" step="any" value="" />
+              </label>
+            </div>
+            <div id="sizing-list" class="regions" hidden></div>
+          </div>
+        </details>
+
+        <details class="group">
+          <summary>PATCH CONFORMING</summary>
+          <div class="group-body">
+            <label class="field">Triangle Surface Mesher
+              <select id="surface-algo">
+                <option value="program_controlled" selected>Program Controlled</option>
+                <option value="delaunay">Delaunay</option>
+                <option value="frontal_delaunay">Frontal-Delaunay</option>
+                <option value="meshadapt">MeshAdapt</option>
+              </select>
+            </label>
+          </div>
+        </details>
+
+        <details class="group">
+          <summary>STATISTICS</summary>
+          <div class="group-body" id="statistics">
+            <div class="stat-row"><span>Nodes</span><span id="stat-nodes">—</span></div>
+            <div class="stat-row"><span>Surface elements</span><span id="stat-elems">—</span></div>
+            <div class="stat-row"><span>Surface quads</span><span id="stat-quads">—</span></div>
+            <div class="stat-row"><span>Triangles</span><span id="stat-tris">—</span></div>
+            <div class="stat-row"><span>Volume tets</span><span id="stat-tets">—</span></div>
+            <div class="stat-row"><span>Volume hexes</span><span id="stat-hexes">—</span></div>
+            <div class="stat-row"><span>Volume prisms</span><span id="stat-prisms">—</span></div>
+          </div>
+        </details>
+
+        <details class="group">
+          <summary>REFINEMENT</summary>
+          <div class="group-body">
+            <div class="btn-row">
+              <button id="add-region-btn" type="button">Add refinement region</button>
+              <button id="pick-face-btn" type="button">Pick face</button>
+              <button id="pick-edge-btn" type="button">Pick edge</button>
+            </div>
+            <p class="hint">Box refinement regions and per-face/edge sizing via picking.</p>
+            <div id="regions" class="regions" hidden></div>
+          </div>
+        </details>
+
+        <input id="load-project-input" type="file" accept=".json" hidden />
+        <span class="toolbar-status" id="toolbar-status"></span>
+      </div>
+
+      <div id="quality" class="quality" hidden></div>
+    </aside>
+
+    <div class="splitter" id="splitter" title="Drag to resize the panels"></div>
+
+    <section class="content">
+      <div class="cad-toolbar">
+        <label class="tool">Entity
+          <select id="entity-type">
+            <option value="off">Off</option>
+            <option value="face" selected>Face</option>
+            <option value="edge">Edge</option>
+            <option value="vertex">Vertex</option>
+          </select>
+        </label>
+        <label class="tool">Selection
+          <select id="selection-mode">
+            <option value="single" selected>Single Select</option>
+            <option value="box">Box Select</option>
+          </select>
+        </label>
+        <span class="tool-sep"></span>
+        <label class="tool">Display
+          <select id="display-mode">
+            <option value="shaded" selected>Shaded</option>
+            <option value="wireframe">Wireframe</option>
+            <option value="shaded_edges">Shaded + Edges</option>
+          </select>
+        </label>
+        <span class="tool-sep"></span>
+        <span id="sel-count" class="sel-count">0 selected</span>
+      </div>
+      <div class="stage" id="stage">
+        <div class="stage-hint" id="stage-hint">Import an STL to begin.</div>
+        <div id="sel-info" class="sel-info" hidden></div>
+        <div id="view-ctx-menu" class="ctx-menu" hidden></div>
+        <div class="viewport-tools">
+          <button id="zoom-in" type="button" title="Zoom in">+</button>
+          <button id="zoom-out" type="button" title="Zoom out">−</button>
+          <button id="fit-view" type="button" title="Fit view to model">Fit</button>
+          <button id="grid-toggle" type="button" title="Show / hide grid and axes">&#9638;</button>
+          <button id="iso-view" type="button" title="Isometric view">Iso</button>
+          <div id="orient-widget" title="Click X/Y/Z to look down that axis. Drag to free-rotate. Double-click to reset."></div>
+        </div>
+      </div>
+
+      <div class="console-resizer" id="console-resizer" title="Drag to resize the console. Double-click to collapse/expand."></div>
+      <div class="console" id="console">
+        <div class="console-head">
+          <span>Console</span>
+          <button id="console-hide" type="button" class="console-toggle" title="Hide / show console">&#9662;</button>
+        </div>
+        <div class="console-body" id="console-body"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="statusbar">
+    <span id="gmsh-version">Mesh engine: connecting…</span>
+    <span id="mesh-stats" class="spacer"></span>
+    <div class="file-btns">
+      <button id="file-msh" type="button" class="icon-btn" title="Download .msh" hidden>&#128196;</button>
+      <button id="file-stl" type="button" class="icon-btn" title="View STL preview" hidden>&#128065;</button>
+    </div>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
+  <script src="app.js?v=56"></script>
+</body>
+</html>
