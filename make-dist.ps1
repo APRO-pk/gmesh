@@ -11,8 +11,11 @@ if (Test-Path $dist) { Remove-Item $dist -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $clean | Out-Null
 
 # --- root files ---
-foreach ($f in @("Cargo.toml", "Cargo.lock", "AGENTS.md", "MD-HISTORY.md", "start-gmesh.bat", "watchdog.bat")) {
-    Copy-Item (Join-Path $root $f) -Destination $clean
+foreach ($f in @("Cargo.toml", "Cargo.lock", "AGENTS.md", "MD-HISTORY.md", "README.md",
+                 ".gitignore", "start-gmesh.bat", "watchdog.bat", "make-dist.ps1")) {
+    if (Test-Path (Join-Path $root $f)) {
+        Copy-Item (Join-Path $root $f) -Destination $clean -Force
+    }
 }
 
 # --- source directories ---
