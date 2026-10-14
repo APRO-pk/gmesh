@@ -151,14 +151,33 @@ impl Worker {
 }
 
 /// Resolves the path to the Python worker script.
+///
+/// Order: explicit env var, then a `python/gmesh_worker.py` next to the
+/// executable (so a shipped build is relocatable), then the source tree the
+/// binary was compiled from.
 pub fn worker_script_path() -> PathBuf {
-    std::env::var_os("GMESH_WORKER")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("python")
-                .join("gmesh_worker.py")
-        })
+    if let Some(p) = std::env::var_os("GMESH_WORKER") {
+        return PathBuf::from(p);
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            // .../gmesh.exe -> .../python/gmesh_worker.py
+            let cand = dir.join("python").join("gmesh_worker.py");
+            if cand.is_file() {
+                return cand;
+            }
+            // .../target/release/gmesh.exe -> <root>/python/gmesh_worker.py
+            if let Some(root) = dir.parent().and_then(|p| p.parent()) {
+                let cand = root.join("python").join("gmesh_worker.py");
+                if cand.is_file() {
+                    return cand;
+                }
+            }
+        }
+    }
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("python")
+        .join("gmesh_worker.py")
 }
 
 /// Writer/reader loop. Consumes jobs serially: writes one request line to

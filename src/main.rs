@@ -155,10 +155,31 @@ fn listen_addr() -> SocketAddr {
         .unwrap_or_else(|| "127.0.0.1:3000".parse().expect("static fallback addr"))
 }
 
+/// Locates the static web assets.
+///
+/// Order: explicit env var, then a `web/` folder next to the executable (so a
+/// shipped build is relocatable), then the source tree it was compiled from.
 fn web_dir() -> PathBuf {
-    std::env::var_os("GMESH_WEB_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("web"))
+    if let Some(p) = std::env::var_os("GMESH_WEB_DIR") {
+        return PathBuf::from(p);
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            // .../gmesh.exe -> .../web
+            let cand = dir.join("web");
+            if cand.is_dir() {
+                return cand;
+            }
+            // .../target/release/gmesh.exe -> <root>/web
+            if let Some(root) = dir.parent().and_then(|p| p.parent()) {
+                let cand = root.join("web");
+                if cand.is_dir() {
+                    return cand;
+                }
+            }
+        }
+    }
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("web")
 }
 
 /// Disable browser caching so the always-evolving frontend assets are

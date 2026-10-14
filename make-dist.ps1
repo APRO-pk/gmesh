@@ -28,6 +28,20 @@ if (Test-Path (Join-Path $root ".opencode\skills")) {
     Copy-Item (Join-Path $root ".opencode\skills") -Destination $clean -Recurse
 }
 
+# --- prebuilt server binary (optional) -------------------------------------
+# Include the optimised server so the recipient does NOT need Rust: they only
+# need Python 3 + the gmsh package, then double-click start-gmesh.bat.
+# watchdog.bat looks for target\release\gmesh.exe first.
+$prebuilt = Join-Path $root "target\release\gmesh.exe"
+if ((Test-Path $prebuilt) -and -not $NoBinary) {
+    $binDir = Join-Path $clean "target\release"
+    New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+    Copy-Item $prebuilt -Destination $binDir -Force
+    Write-Host "Included prebuilt server: target\release\gmesh.exe"
+} else {
+    Write-Host "No prebuilt server included (source only)."
+}
+
 # --- strip generated / cache artifacts from the copy ---
 $excludeDirs = @("__pycache__", ".pytest_cache", ".mypy_cache", "node_modules", ".venv", "venv")
 Get-ChildItem $clean -Recurse -Directory |
@@ -50,6 +64,6 @@ Get-ChildItem $clean -Recurse -File | ForEach-Object { $_.FullName.Substring($cl
     Sort-Object | ForEach-Object { Write-Host "  $_" }
 Write-Host ""
 Write-Host "EXCLUDED (never copied):" -ForegroundColor Yellow
-Write-Host "  target\ (Rust build output)" -ForegroundColor Yellow
+Write-Host "  target\ (except the prebuilt target\release\gmesh.exe)" -ForegroundColor Yellow
 Write-Host "  .git\ .opencode\ dist\ (VCS / tooling / this output)" -ForegroundColor Yellow
 Write-Host "  __pycache__\ *.pyc node_modules\ .venv\ venv\ (caches / env)" -ForegroundColor Yellow

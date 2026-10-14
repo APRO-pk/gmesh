@@ -44,3 +44,7 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Local watchdog/debug scratch
+/watchdog-out.txt
+/run.log
